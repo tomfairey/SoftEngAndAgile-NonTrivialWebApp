@@ -1,0 +1,73 @@
+version: "3.3"
+
+services:
+  backend:
+    build:
+      context: ./backend/
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required, see .env.example file}
+    ports:
+      - 8081:80
+    # expose:
+    #   - 80
+    # deploy:
+    #   replicas: 4
+    #   labels:
+    #     - "traefik.enable=true"
+    #     - "traefik.http.routers.whoami.rule=Host(`localhost`)"
+    #     - "traefik.http.routers.whoami.entrypoints=web"
+    ### TODO: EXPOSE AS /api/ ###
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.whoami.rule=Host(`localhost`)"
+    #   - "traefik.http.routers.whoami.entrypoints=web"
+    restart: always
+
+  ### TODO: Make the frontend build/run in a container ###
+  # frontend:
+  #   build:
+  #     context: ./frontend/
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     - "BACKEND_BASE=localhost:8081"
+  #   ports:
+  #     - 8082:80
+  #   expose:
+  #     - 80
+  #   deploy:
+  #     replicas: 4
+  #     labels:
+  #       - "traefik.enable=true"
+  #       - "traefik.http.routers.whoami.rule=Host(`localhost`)"
+  #       - "traefik.http.routers.whoami.entrypoints=web"
+  #   ### TODO: EXPOSE AS / ###
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.whoami.rule=Host(`localhost`)"
+  #     - "traefik.http.routers.whoami.entrypoints=web"
+  #   restart: always
+
+  database:
+    image: "postgres:12"
+    container_name: "database"
+    environment:
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required}
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+volumes:
+  postgres_data:
+    driver: local
