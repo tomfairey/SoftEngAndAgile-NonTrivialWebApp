@@ -1,0 +1,11 @@
+---
+
+import bootstrapIcons from 'bootstrap-icons/bootstrap-icons.svg?url'
+
+const { icon, width, height, color } = Astro.props
+
+---
+
+<svg class="bi" width={ width || 24 } height={ height || 24 } fill={ color || "currentColor" }>
+    <use xlink:href={`${bootstrapIcons}#${icon}`} />
+</svg>

@@ -1,0 +1,21 @@
+@use 'reset';
+
+@use 'bootstrap';
+
+@use 'darklight';
+@use 'font';
+@use 'table';
+
+:root {
+    --font-family: Arial, serif;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-family);
+}
+
+main.main {
+    padding: 8px;
+}

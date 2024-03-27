@@ -1,0 +1,183 @@
+---
+
+import BaseTemplate from '@layout/Base.astro'
+
+import { getAccount, editAccount } from '@modules/api'
+import { AccountRole } from '@type/Account.types'
+
+if(!Astro.locals.loggedIn) return Astro.redirect("/login")
+
+if(!Astro.locals.admin) return Astro.redirect("/")
+
+if(!Astro.params.id) return Astro.redirect("/account/")
+
+let message = undefined,
+    now = Date.now(),
+    confirmDialog: string | undefined = undefined;
+
+    let {
+        result: {
+            id,
+            uuid,
+            username,
+            name,
+            role,
+            password_last_modified: passwordLastModified,
+            disabled,
+            last_modified: lastModified,
+            created_at: createdAt
+        }
+    } = await getAccount({ id: Astro.params.id }, Astro.locals.token)
+
+if(Astro.request.method == "POST") {
+    try {
+        const data = await Astro.request.formData()
+
+        if(data.get("_method") as string == "DELETE") {
+            // id = parseInt(Astro.params.id)
+            // const confirmed = !!(data.get("confirmed") as string)
+
+            // console.log({id, confirmed})
+
+            // try {
+            //     const deleteResponse = await deleteOperatingCompany({ id: id.toString(), confirmed }, Astro.locals.token)
+
+            //     if(!confirmed) {
+            //         confirmDialog = deleteResponse.message
+            //     } else {
+            //         return Astro.redirect("/account/")
+            //     }
+            // } catch(e: any) {
+            //     if(e?.cause == "safe") {
+            //         message = e.message
+            //     } else {
+            //         throw e
+            //     }
+            // }
+        } else {
+            id = parseInt(Astro.params.id),
+            uuid = data.get("uuid") as string,
+            username = data.get("username") as string,
+            name = data.get("name") as string,
+            role = AccountRole[data.get("role") as keyof typeof AccountRole],
+            disabled = data.get("disabled") as string == "on"
+
+            console.log({
+                id,
+                disabled
+            })
+
+            try {
+                ({
+                    result: {
+                        id,
+                        uuid,
+                        username,
+                        name,
+                        role,
+                        disabled
+                    }
+                } = await editAccount({ id: id.toString(), uuid, username, name, role, disabled }, Astro.locals.token))
+
+            } catch(e: any) {
+                if(e?.cause == "safe") {
+                    message = e.message
+                } else {
+                    throw e
+                }
+            }
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error(error.message);
+        }
+    }
+}
+
+---
+
+<BaseTemplate>
+	<h1>Edit Account #{id}</h1>
+	<h3>
+		Modify an account below...
+	</h3>
+
+	<section class="form-container">
+        <!-- <form action="" method="POST" data-astro-reload style="display: flex; justify-content: flex-end;">
+            <input type="hidden" name="_method" value="DELETE">
+            <input type="hidden" name="confirmed" value="" />
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form> -->
+		<form action="" method="POST" data-astro-reload>
+            <div class="form-group">
+                <label for="id">ID:</label>
+                <input type="text" class="form-control" id="id" name="id" disabled value={ id }>
+            </div>
+            <div class="form-group">
+                <label for="uuid">UUID:</label>
+                <input type="text" class="form-control" id="uuid" name="uuid" disabled value={ uuid }>
+            </div>
+			<div class="form-group">
+			  <label for="username">Username:</label>
+			  <input type="text" class="form-control" id="username" name="username" placeholder="Username" maxlength="4" required value={ username }>
+			</div>
+			<div class="form-group">
+			  <label for="name">Name:</label>
+			  <input type="text" class="form-control" id="name" name="name" placeholder="Name" value={ name }>
+			</div>
+			<div class="form-group">
+                <label for="role">Role:</label>
+                <input type="text" class="form-control" id="role" name="role" placeholder="Role" value={ role || AccountRole.STANDARD }>
+                <small id="roleHelp" class="form-text text-muted">Admin: {AccountRole.ADMIN} / Standard: {AccountRole.STANDARD}</small>
+            </div>
+			<div class="form-group">
+                <label for="password_last_modified">Password last modified:</label>
+                <input type="text" class="form-control" id="password_last_modified" name="password_last_modified" disabled value={ (new Date(passwordLastModified).toLocaleString() ) }>
+            </div>
+			<div class="form-group">
+                <label for="disabled">Disabled:</label>
+                <input type="checkbox" id="disabled" name="disabled" checked={ disabled }>
+            </div>
+			<div class="form-group">
+                <label for="created_at">Created at:</label>
+                <input type="text" class="form-control" id="created_at" name="created_at" disabled value={ (new Date(createdAt).toLocaleString() ) }>
+            </div>
+			<div class="form-group">
+                <label for="last_modified">Last modified:</label>
+                <input type="text" class="form-control" id="last_modified" name="last_modified" disabled value={ (new Date(lastModified).toLocaleString() ) }>
+            </div>
+			<button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+
+        { !!confirmDialog && <dialog open>
+                <form method="dialog" data-astro-reload style="display: flex; justify-content: flex-end;">
+                    <button type="submit" class="btn btn-warning">X</button>
+                </form>
+                <h2>Are you sure?</h2>
+                <p>{ confirmDialog }</p>
+                <form action="" method="POST" data-astro-reload style="display: flex; justify-content: flex-end;">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <input type="hidden" name="confirmed" value="1" />
+                    <button type="submit" class="btn btn-danger">Yes, delete</button>
+                </form>
+        </dialog> }
+	</section>
+
+    { message ?
+            <div class="toast-container position-fixed bottom-0 end-0 p-3" data-ts={ now } transition:animate="none">
+                <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <strong class="me-auto">Error</strong>
+                        <small>Just now</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        { message }
+                    </div>
+                </div>
+            </div>
+            <script data-ts={ now } is:inline>
+                (new bootstrap.Toast(document.getElementById('liveToast'))).show()
+            </script>
+        : '' }
+</BaseTemplate>

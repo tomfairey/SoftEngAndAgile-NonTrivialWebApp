@@ -1,0 +1,121 @@
+version: "3.3"
+
+services:
+  backend:
+    build:
+      context: ./backend/
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_HOST=database
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required, see .env.example file}
+      - JWT_SECRET=${JWT_SECRET:?JWT secret is required, see .env.example file}
+    expose:
+      - 80
+    healthcheck:
+      test: "wget --no-verbose --tries=1 http://localhost/api/v1/status || exit 1"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+      - database
+    depends_on:
+      database:
+        condition: service_healthy
+      initialiser:
+        condition: service_completed_successfully
+    deploy:
+      replicas: 4
+    ### TODO: EXPOSE AS /api/ ###
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`localhost`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend/
+      dockerfile: Dockerfile
+    expose:
+      - 80
+    networks:
+      - backend
+      - frontend
+      - traefik-proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+      initialiser:
+        condition: service_completed_successfully
+    deploy:
+      replicas: 4
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.softengandagile.entrypoints=http"
+      - "traefik.http.routers.softengandagile.rule=Host(`softengandagile-nontrivial.thomasfairey.co.uk`)"
+      - "traefik.http.middlewares.softengandagile-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.softengandagile.middlewares=softengandagile-https-redirect"
+      - "traefik.http.routers.softengandagile-secure.entrypoints=https"
+      - "traefik.http.routers.softengandagile-secure.rule=Host(`softengandagile-nontrivial.thomasfairey.co.uk`)"
+      - "traefik.http.routers.softengandagile-secure.tls=true"
+      - "traefik.http.routers.softengandagile-secure.tls.certresolver=http"
+      - "traefik.http.routers.softengandagile-secure.service=softengandagile"
+      - "traefik.http.services.softengandagile.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-proxy"
+    restart: always
+
+  initialiser:
+    build:
+      context: ./initialiser/
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_HOST=database
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required, see .env.example file}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin1!}
+      - FORCE_RUN=0
+    networks:
+      - database
+    depends_on:
+      database:
+        restart: true
+        condition: service_healthy
+      backend:
+        restart: true
+    restart: on-failure
+
+  database:
+    # image: "postgis/postgis:12-3.4"
+    image: "postgres:12-alpine"
+    container_name: "database"
+    environment:
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  backend:
+    internal: true
+  database:
+    internal: true
+  frontend:
+  traefik-proxy:
+    external: true

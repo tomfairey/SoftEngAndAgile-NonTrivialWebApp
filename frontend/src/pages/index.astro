@@ -1,0 +1,23 @@
+---
+
+import BaseTemplate from '@layout/Base.astro'
+
+const { loggedIn } = Astro.locals
+
+---
+
+<BaseTemplate>
+	<h1>Fleet Manager</h1>
+	{ loggedIn ?
+		<h3>
+			Choose a link above to get started or view the stats below...
+		</h3>
+		:
+		<h3>
+			Please <a href="login">login</a> to get started...
+		</h3>
+	}
+
+	<!-- Stats here -->
+	<!-- Maybe also quick links to change current user password/UUID? -->
+</BaseTemplate>

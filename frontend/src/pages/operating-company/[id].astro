@@ -1,0 +1,146 @@
+---
+
+import BaseTemplate from '@layout/Base.astro'
+
+import { getOperatingCompany, editOperatingCompany, deleteOperatingCompany } from '@modules/api'
+
+if(!Astro.locals.loggedIn) return Astro.redirect("/login")
+
+if(!Astro.params.id) return Astro.redirect("/operating-company/")
+
+let message = undefined,
+    now = Date.now(),
+    confirmDialog: string | undefined = undefined;
+
+    let {
+        result: {
+            id,
+            noc,
+            short_code: shortCode,
+            name
+        }
+    } = await getOperatingCompany(Astro.params.id, Astro.locals.token)
+
+if(Astro.request.method == "POST") {
+    try {
+        const data = await Astro.request.formData()
+
+        if(data.get("_method") as string == "DELETE") {
+            id = parseInt(Astro.params.id)
+            const confirmed = !!(data.get("confirmed") as string)
+
+            console.log({id, confirmed})
+
+            try {
+                const deleteResponse = await deleteOperatingCompany({ id: id.toString(), confirmed }, Astro.locals.token)
+
+                if(!confirmed) {
+                    confirmDialog = deleteResponse.message
+                } else {
+                    return Astro.redirect("/operating-company/")
+                }
+            } catch(e: any) {
+                if(e?.cause == "safe") {
+                    message = e.message
+                } else {
+                    throw e
+                }
+            }
+        } else {
+            id = parseInt(Astro.params.id),
+            noc = data.get("noc") as string,
+            shortCode = data.get("shortCode") as string,
+            name = data.get("name") as string
+
+            try {
+                ({
+                    result: {
+                        id,
+                        noc,
+                        short_code: shortCode,
+                        name
+                    }
+                } = await editOperatingCompany({ id: id.toString(), noc, shortCode, name }, Astro.locals.token))
+
+            } catch(e: any) {
+                if(e?.cause == "safe") {
+                    message = e.message
+                } else {
+                    throw e
+                }
+            }
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error(error.message);
+        }
+    }
+}
+
+---
+
+<BaseTemplate>
+	<h1>Edit Operating Company #{id}</h1>
+	<h3>
+		Modify an operating company below...
+	</h3>
+
+	<section class="form-container">
+        <form action="" method="POST" data-astro-reload style="display: flex; justify-content: flex-end;">
+            <input type="hidden" name="_method" value="DELETE">
+            <input type="hidden" name="confirmed" value="" />
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+		<form action="" method="POST" data-astro-reload>
+            <div class="form-group">
+                <label for="id">ID:</label>
+                <input type="text" class="form-control" id="id" name="id" disabled value={ id }>
+              </div>
+			<div class="form-group">
+			  <label for="noc">National Operator Code (NOC):</label>
+			  <input type="text" class="form-control" id="noc" name="noc" aria-describedby="nocHelp" placeholder="National Operator Code" maxlength="4" required value={ noc }>
+			  <small id="nocHelp" class="form-text text-muted">Codes can be checked at <a href="https://www.travelinedata.org.uk/traveline-open-data/transport-operations/browse/" target="_blank">travelinedata.org.uk</a></a></small>
+			</div>
+			<div class="form-group">
+			  <label for="shortCode">Short code (TIS code):</label>
+			  <input type="text" class="form-control" id="shortCode" name="shortCode" placeholder="Short code" maxlength="3" value={ shortCode }>
+			</div>
+			<div class="form-group">
+			  <label for="name">Name:</label>
+			  <input type="text" class="form-control" id="name" name="name" placeholder="Stagecoach in..." value={ name }>
+			</div>
+			<button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+
+        { !!confirmDialog && <dialog open>
+                <form method="dialog" data-astro-reload style="display: flex; justify-content: flex-end;">
+                    <button type="submit" class="btn btn-warning">X</button>
+                </form>
+                <h2>Are you sure?</h2>
+                <p>{ confirmDialog }</p>
+                <form action="" method="POST" data-astro-reload style="display: flex; justify-content: flex-end;">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <input type="hidden" name="confirmed" value="1" />
+                    <button type="submit" class="btn btn-danger">Yes, delete</button>
+                </form>
+        </dialog> }
+	</section>
+
+    { message ?
+            <div class="toast-container position-fixed bottom-0 end-0 p-3" data-ts={ now } transition:animate="none">
+                <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <strong class="me-auto">Error</strong>
+                        <small>Just now</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        { message }
+                    </div>
+                </div>
+            </div>
+            <script data-ts={ now } is:inline>
+                (new bootstrap.Toast(document.getElementById('liveToast'))).show()
+            </script>
+        : '' }
+</BaseTemplate>
