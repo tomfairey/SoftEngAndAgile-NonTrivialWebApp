@@ -1,0 +1,16 @@
+---
+
+import BaseLayout from '@layout/Base.astro'
+import { accessTokenCookieName, refreshTokenCookieName } from '@middleware/authorisation'
+
+Astro.cookies.delete(accessTokenCookieName)
+Astro.cookies.delete(refreshTokenCookieName)
+
+---
+
+<BaseLayout>
+    <h1>Logout</h1>
+    <h3>
+        You have been logged out...
+    </h3>
+</BaseLayout>

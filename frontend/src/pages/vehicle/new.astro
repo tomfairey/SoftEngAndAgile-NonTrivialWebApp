@@ -1,0 +1,86 @@
+---
+
+import BaseTemplate from '@layout/Base.astro'
+
+import { newVehicle } from '@modules/api'
+
+if(!Astro.locals.loggedIn) return Astro.redirect("/login")
+
+if(!Astro.locals.admin) return Astro.redirect("/")
+
+let fleet_no: number | undefined = undefined,
+	opco_id: number | undefined = undefined,
+    message = undefined,
+    now = Date.now();
+
+if(Astro.request.method == "POST") {
+    try {
+        const data = await Astro.request.formData()
+
+		fleet_no = parseInt(data.get("fleet_no") as string),
+		opco_id = parseInt(data.get("opco_id") as string)
+
+        if(fleet_no && opco_id) {
+            try {
+                ({
+                        result: {
+							fleet_no
+						}
+                    } = await newVehicle({ fleet_no, opco_id }, Astro.locals.token))
+
+                return Astro.redirect(`/vehicle/${fleet_no}`)
+            } catch(e: any) {
+                if(e?.cause == "safe") {
+                    message = e.message
+                } else {
+                    throw e
+                }
+            }
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error(error.message);
+        }
+    }
+}
+
+---
+
+<BaseTemplate>
+	<h1>New Vehicle</h1>
+	<h3>
+		Create a new vehicle below...
+	</h3>
+
+	<section class="form-container">
+		<form action="" method="POST" data-astro-reload>
+            <div class="form-group">
+                <label for="fleet_no">Fleet number:</label>
+                <input type="text" class="form-control" id="fleet_no" name="fleet_no" value={ fleet_no }>
+              </div>
+			<div class="form-group">
+			  <label for="opco_id">Operating Company ID:</label>
+			  <input type="number" class="form-control" id="opco_id" name="opco_id" placeholder="Operating Company ID" required value={ opco_id }>
+			</div>
+			<button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+	</section>
+
+    { message ?
+            <div class="toast-container position-fixed bottom-0 end-0 p-3" data-ts={ now } transition:animate="none">
+                <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <strong class="me-auto">Error</strong>
+                        <small>Just now</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        { message }
+                    </div>
+                </div>
+            </div>
+            <script data-ts={ now } is:inline>
+                (new bootstrap.Toast(document.getElementById('liveToast'))).show()
+            </script>
+        : '' }
+</BaseTemplate>

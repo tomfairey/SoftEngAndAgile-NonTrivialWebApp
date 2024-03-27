@@ -1,0 +1,88 @@
+---
+
+const { loggedIn, admin, name } = Astro.locals
+
+const links = [
+    {
+        href: "/",
+        text: "Home"
+    },
+    ...loggedIn ? [{
+        href: "/import-task/",
+        text: "Import"
+    },{
+        href: "/map/",
+        text: "Map"
+    },{
+        href: "/operating-company/",
+        text: "OpCo"
+    },{
+        href: "/vehicle/",
+        text: "Vehicle"
+    },
+    ... admin ? [{
+        href: "/account/",
+        text: "Account"
+    }] : [],
+    {
+        href: "/logout",
+        text: `Logout, ${name}`,
+        prefetch: "tap"
+    }] : [{
+        href: "/login",
+        text: "Login"
+    }]
+]
+
+---
+
+<style lang="scss">
+    header {
+        display: flex;
+        position: relative;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 32px;
+
+        background: black;
+        // height: 32px;
+        height: 48px;
+        padding: 8px 12px 8px 8px;
+
+        overflow-y: auto;
+    }
+
+    .logo {
+        display: flex;
+        align-items: center;
+        color: white;
+    }
+
+    nav {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 18px;
+        width: 100%;
+
+        > a {
+            color: white;
+        }
+
+        > *:last-child {
+            margin-left: auto;
+        }
+    }
+</style>
+
+<header>
+    <div class="logo" aria-label="Astro">
+        <img src="/favicon.svg" width="32" height="32" alt="Astro logo" aria-hidden="true">
+        <span aria-hidden="true">stro</span>
+    </div>
+    <nav>
+        { links.map(link => {
+            return <a href={ link.href } data-astro-prefetch={ link?.prefetch }>{ link.text }</a>
+        }) }
+    </nav>
+</header>

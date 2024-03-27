@@ -1,26 +1,33 @@
 version: "3.3"
 
-###############################################
-### UNTESTED AND NOT YET FOR PRODUCTION USE ###
-###############################################
-
 services:
   backend:
     build:
       context: ./backend/
       dockerfile: Dockerfile
     environment:
+      - POSTGRES_HOST=database
       - POSTGRES_DB=${PG_DB:-nontrivial-pg}
       - POSTGRES_USER=${PG_USER:-nontrivial-pg}
-      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required, see .env.example file}
+      - JWT_SECRET=${JWT_SECRET:?JWT secret is required, see .env.example file}
     expose:
       - 80
+    healthcheck:
+      test: "wget --no-verbose --tries=1 http://localhost/api/v1/status || exit 1"
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+      - database
+    depends_on:
+      database:
+        condition: service_healthy
+      initialiser:
+        condition: service_completed_successfully
     deploy:
       replicas: 4
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.whoami.rule=Host(`localhost`)"
-        - "traefik.http.routers.whoami.entrypoints=web"
     ### TODO: EXPOSE AS /api/ ###
     labels:
       - "traefik.enable=true"
@@ -32,34 +39,67 @@ services:
     build:
       context: ./frontend/
       dockerfile: Dockerfile
-    environment:
-      - "BACKEND_BASE=https://softengagile-nontrivial.webwizard.uk/api/"
     expose:
       - 80
+    networks:
+      - backend
+      - frontend
+      - traefik-proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+      initialiser:
+        condition: service_completed_successfully
     deploy:
       replicas: 4
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.whoami.rule=Host(`localhost`)"
-        - "traefik.http.routers.whoami.entrypoints=web"
-    ### TODO: EXPOSE AS / ###
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`localhost`)"
-      - "traefik.http.routers.whoami.entrypoints=web"
+      - "traefik.http.routers.softengandagile.entrypoints=http"
+      - "traefik.http.routers.softengandagile.rule=Host(`softengandagile-nontrivial.thomasfairey.co.uk`)"
+      - "traefik.http.middlewares.softengandagile-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.softengandagile.middlewares=softengandagile-https-redirect"
+      - "traefik.http.routers.softengandagile-secure.entrypoints=https"
+      - "traefik.http.routers.softengandagile-secure.rule=Host(`softengandagile-nontrivial.thomasfairey.co.uk`)"
+      - "traefik.http.routers.softengandagile-secure.tls=true"
+      - "traefik.http.routers.softengandagile-secure.tls.certresolver=http"
+      - "traefik.http.routers.softengandagile-secure.service=softengandagile"
+      - "traefik.http.services.softengandagile.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-proxy"
     restart: always
 
+  initialiser:
+    build:
+      context: ./initialiser/
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_HOST=database
+      - POSTGRES_DB=${PG_DB:-nontrivial-pg}
+      - POSTGRES_USER=${PG_USER:-nontrivial-pg}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required, see .env.example file}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin1!}
+      - FORCE_RUN=0
+    networks:
+      - database
+    depends_on:
+      database:
+        restart: true
+        condition: service_healthy
+      backend:
+        restart: true
+    restart: on-failure
+
   database:
-    image: "postgres:12"
+    # image: "postgis/postgis:12-3.4"
+    image: "postgres:12-alpine"
     container_name: "database"
     environment:
       - POSTGRES_DB=${PG_DB:-nontrivial-pg}
       - POSTGRES_USER=${PG_USER:-nontrivial-pg}
       - POSTGRES_PASSWORD=${PG_PASSWORD:?Postgres password is required}
-    ports:
-      - 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - database
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 1s
@@ -67,30 +107,15 @@ services:
       retries: 10
     restart: always
 
-  traefik:
-    image: "traefik:v2.10"
-    container_name: "traefik"
-    command:
-      #- "--log.level=DEBUG"
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8080:8080"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    restart: always
-
-  whoami:
-    image: "traefik/whoami"
-    container_name: "simple-service"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`whoami.localhost`)"
-      - "traefik.http.routers.whoami.entrypoints=web"
-
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  backend:
+    internal: true
+  database:
+    internal: true
+  frontend:
+  traefik-proxy:
+    external: true

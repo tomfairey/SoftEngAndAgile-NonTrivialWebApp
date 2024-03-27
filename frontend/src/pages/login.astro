@@ -1,0 +1,92 @@
+---
+
+import BaseLayout from '@layout/Base.astro'
+import { login } from '@modules/api'
+import { accessTokenCookieName, refreshTokenCookieName, cookieOptions } from '@middleware/authorisation'
+
+let prefilledUsername = undefined,
+    message = undefined,
+    now = Date.now();
+
+const { loggedIn } = Astro.locals
+
+if(loggedIn) {
+    return Astro.redirect(Astro.url.searchParams.get('redirect') || "/")
+}
+
+if(Astro.request.method == "POST") {
+    try {
+        const data = await Astro.request.formData(),
+            username = data.get("username") as string,
+            password = data.get("password") as string
+
+        if(username && password) {
+            try {
+                const {
+                        access_token,
+                        refresh_token
+                    } = await login(username, password)
+
+                Astro.cookies.set(accessTokenCookieName, access_token, cookieOptions)
+                Astro.cookies.set(refreshTokenCookieName, refresh_token, cookieOptions)
+
+                return Astro.redirect(Astro.url.searchParams.get('redirect') || "/")
+            } catch(e: any) {
+                if(e?.cause == "safe") {
+                    message = e.message
+                } else {
+                    throw e
+                }
+            }
+        } else {
+            prefilledUsername = username
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error(error.message);
+        }
+    }
+}
+
+---
+
+<BaseLayout>
+    <h1>Login</h1>
+    <h3>
+        Please enter your account details below to login...
+    </h3>
+
+    <small><i>The default administrator account is Username: <code>admin</code> Password: <code>Admin1!</code></i></small>
+
+    <form action="" method="POST" data-astro-reload>
+        <div class="form-group mt-2 mb-2">
+            <label for="username">Username</label>
+            <input type="text" class="form-control" placeholder="Username" id="username" name="username" required minlength="1" maxlength="36" value={ prefilledUsername }>
+        </div>
+
+        <div class="form-group mb-4">
+            <label for="password">Password</label>
+            <input type="password" class="form-control" placeholder="Password" id="password" name="password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+
+    { message ?
+            <div class="toast-container position-fixed bottom-0 end-0 p-3" data-ts={ now } transition:animate="none">
+                <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <strong class="me-auto">Error</strong>
+                        <small>Just now</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        { message }
+                    </div>
+                </div>
+            </div>
+            <script data-ts={ now } is:inline>
+                (new bootstrap.Toast(document.getElementById('liveToast'))).show()
+            </script>
+        : '' }
+</BaseLayout>
